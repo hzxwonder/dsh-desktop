@@ -1,3 +1,8 @@
+import { join } from 'node:path'
+import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
+import { PROMPT_PATH } from './prompt-contract.ts'
+import { PromptStore } from './prompt-store.ts'
+import { handlePromptRequest } from './prompt-route.ts'
 /** DSH Desktop Host plugin: owns the selected native shell generation. */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -264,6 +269,14 @@ export function apply(ctx: Context, config: Config): void {
     },
   )
   const rendererOrigin = `http://127.0.0.1:${String(ctx.webServer.port)}`
+  const prompts = new PromptStore(join(resolveDshHome(), 'desktop-prompts', 'prompts.json'))
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact', path: PROMPT_PATH,
+    handler: (req, res) => {
+      if (rejectDesktopRequest(ctx, req, res)) return
+      return handlePromptRequest(req, res, rendererOrigin, prompts)
+    },
+  }), 'desktop-prompt: library API')
   ctx.effect(
     () => ctx.webServer.register({
       kind: 'exact',

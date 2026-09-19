@@ -1,3 +1,4 @@
+import { PROMPT_PATH } from '../src/prompt-contract.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -441,6 +442,7 @@ describe('desktop Host plugin', () => {
     harness.requestRejection.mockReturnValue(status)
     apply(harness.ctx, config)
     const expectedPaths = [
+      PROMPT_PATH,
       DESKTOP_SETTINGS_PATH,
       DESKTOP_PROFILE_CREATE_PATH,
       DESKTOP_PROFILE_DELETE_PATH,

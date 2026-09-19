@@ -1,3 +1,4 @@
+import * as desktopPrompt from './prompt.tsx'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
@@ -89,6 +90,7 @@ export function apply(ctx: ClientContext): void {
     () => provideDesktopWindow(ctx, desktopWindowService(environment)),
     'dsh-plugin-desktop: native window geometry service',
   )
+  ctx.plugin(desktopPrompt)
   const desktopSettings = applyDesktopSettings(ctx, environment)
   // Every mode shares the footer seat: upstream's row flex would otherwise let
   // two launchers crush each other, and compatibility mode installs no frame styles.
