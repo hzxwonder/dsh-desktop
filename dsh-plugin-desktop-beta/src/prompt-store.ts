@@ -33,8 +33,18 @@ export class PromptStore {
     await mkdir(dirname(this.path), { recursive: true, mode: 0o700 })
     return withFileLock(this.path, async () => {
       const rows = await this.list()
-      if (request.action === 'create') {
+      if (request.action === 'create' || request.action === 'duplicate') {
         const value = validatePrompt(request.name, request.content)
+        if (request.action === 'duplicate') {
+          const names = new Set(rows.map(row => row.name.toLocaleLowerCase()))
+          const base = value.name
+          let number = 1
+          do {
+            const suffix = number === 1 ? ' - copy' : ` - copy ${number}`
+            value.name = base.slice(0, 100 - suffix.length).trimEnd() + suffix
+            number++
+          } while (names.has(value.name.toLocaleLowerCase()))
+        }
         if (rows.some(row => row.name.toLocaleLowerCase() === value.name.toLocaleLowerCase())) throw new Error('此名称已存在，请使用其他名称。')
         if (rows.length >= 1000) throw new Error('最多保存 1,000 条提示词。')
         rows.push({ ...value, id: randomUUID(), createdAt: Date.now(), lastUsedAt: null })

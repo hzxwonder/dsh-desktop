@@ -45,6 +45,16 @@ export function PromptLibrary({ api, onClose, initialCreate = false }: { initial
     } catch (cause) { if (alive.current) setError(`${message(cause)} 填写内容已保留。`) }
     finally { inFlight.current = false; if (alive.current) setBusy(false) }
   }
+  const duplicate = async () => {
+    if (inFlight.current || !selected) return
+    inFlight.current = true; setBusy(true); setError('')
+    try {
+      const next = await api.duplicate(name, content)
+      if (!alive.current) return
+      setRows(next); choose(next.at(-1) ?? null); setQuery(''); setNotice('已创建副本')
+    } catch (cause) { if (alive.current) setError(message(cause)) }
+    finally { inFlight.current = false; if (alive.current) setBusy(false) }
+  }
   const remove = async () => {
     if (!selected || inFlight.current) return
     inFlight.current = true; setBusy(true); setError('')
@@ -68,7 +78,7 @@ export function PromptLibrary({ api, onClose, initialCreate = false }: { initial
           <div className="dp-fields"><label htmlFor="dp-name">名称</label><input id="dp-name" ref={nameInput} value={name} maxLength={100} disabled={busy || !loaded} placeholder="为模板起个名字" onChange={event => { setName(event.target.value); setNotice('') }} />
           <label htmlFor="dp-content">正文</label><textarea id="dp-content" value={content} maxLength={100000} disabled={busy || !loaded} placeholder="输入常用的提示词…" onChange={event => { setContent(event.target.value); setNotice('') }} />
           {error && <div className="dp-error" role="alert">{error}{!loaded && <button type="button" className="dp-text" disabled={loading} onClick={() => void load()}>重新加载</button>}</div>}
-          </div><footer className="dp-footer"><div className="dp-actions"><button type="button" className="dp-text" disabled={busy || !content} onClick={() => { void (async () => { try { await navigator.clipboard.writeText(content); if (alive.current) setNotice('已复制') } catch { if (alive.current) setError('复制未完成，请重试。') } })() }}>复制</button><button type="button" className="dp-text dp-delete" disabled={busy || !selected} onClick={() => setDeleting(true)}>删除</button></div><span className="dp-status" role="status">{notice || (dirty ? '未保存' : '')}</span><button className="dp-primary" type="submit" disabled={busy || !loaded || !dirty}>{busy ? '处理中…' : '保存'}</button></footer>
+          </div><footer className="dp-footer"><div className="dp-actions"><button type="button" className="dp-text" disabled={busy || !selected || !name.trim() || !content.trim()} onClick={() => void duplicate()}>复制</button><button type="button" className="dp-text dp-delete" disabled={busy || !selected} onClick={() => setDeleting(true)}>删除</button></div><span className="dp-status" role="status">{notice || (dirty ? '未保存' : '')}</span><button className="dp-primary" type="submit" disabled={busy || !loaded || !dirty}>{busy ? '处理中…' : '保存'}</button></footer>
         </form>
       </div>
     </div>

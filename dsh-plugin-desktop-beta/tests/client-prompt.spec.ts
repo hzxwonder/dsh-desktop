@@ -16,7 +16,8 @@ async function setup() {
   const fetch = vi.fn(async (_url, options) => {
     if (options?.method === 'POST') {
       const body = JSON.parse(options.body)
-      if (body.action === 'create') rows = [...rows, { id: '1', name: body.name, content: body.content, createdAt: 1, lastUsedAt: null }]
+      if (body.action === 'create') rows = [...rows, { id: String(rows.length + 1), name: body.name, content: body.content, createdAt: 1, lastUsedAt: null }]
+      if (body.action === 'duplicate') rows = [...rows, {id: 'copy',name: body.name + ' - copy',content:body.content,createdAt:2,lastUsedAt:null}]
       if (body.action === 'update') rows = rows.map(row => row.id === body.id ? {...row,name:body.name,content:body.content} : row)
       if (body.action === 'delete') rows = rows.filter(row => row.id !== body.id)
       if (body.action === 'use') rows[0]!.lastUsedAt = 10
@@ -148,16 +149,16 @@ it('copies, modifies and deletes a saved template through management controls', 
   })
   const save = async () => act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})) })
   await fill('模板','原文'); await save()
-  const copy = vi.fn(async () => {})
-  Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:copy}})
   await act(async () => { button('复制').click() })
-  expect(copy).toHaveBeenCalledWith('原文')
+  expect((document.querySelector('form input') as HTMLInputElement).value).toBe('模板 - copy')
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('原文')
+  expect(document.querySelector('[aria-label="提示词列表"]')?.textContent).toContain('模板 - copy')
   await fill('新名称','修改后的正文'); await save()
   expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('修改后的正文')
   await act(async () => { button('删除').click() })
   expect(document.querySelector('[role=alertdialog]')?.textContent).toContain('新名称')
   await act(async () => { button('确认删除').click() })
-  expect(document.querySelector('[aria-label="提示词列表"]')?.textContent).toContain('暂无模板')
+  expect(document.querySelector('[aria-label="提示词列表"]')?.textContent).toBe('模板')
 })
 
 it('protects edits when switching to a new template', async () => {

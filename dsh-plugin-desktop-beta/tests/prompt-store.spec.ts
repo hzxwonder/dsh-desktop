@@ -62,3 +62,17 @@ it('updates and deletes by identity while preserving other templates and recent 
   expect(remaining[0]!.name).toBe('Two')
   await expect(source.change({action:'update',id:row!.id,name:'One',content:'lost'})).rejects.toThrow('不存在')
 })
+
+it('duplicates content with unique names atomically, including maximum length names', async () => {
+  const source = await store()
+  const [original] = await source.change({action:'create',name:'Example',content:'hello\nworld'})
+  await Promise.all([1, 2].map(() => source.change({action:'duplicate',name:'Example',content:'hello\nworld'})))
+  const rows = await new PromptStore(source.path).list()
+  expect(rows.map(row => row.name)).toEqual(['Example', 'Example - copy', 'Example - copy 2'])
+  expect(new Set(rows.map(row => row.id)).size).toBe(3)
+  expect(rows[0]).toEqual(original)
+  expect(rows.every(row => row.content === 'hello\nworld')).toBe(true)
+  const long = await source.change({action:'duplicate',name:'x'.repeat(100),content:'body'})
+  expect(long.at(-1)!.name).toHaveLength(100)
+  expect(long.at(-1)!.name.endsWith(' - copy')).toBe(true)
+})
