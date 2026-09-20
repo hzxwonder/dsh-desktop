@@ -35,7 +35,6 @@ async function setup() {
   apply(ctx as unknown as Context)
   const open = async () => { await act(async () => { command?.onPick({ candidate: {name: '新建 Prompt 模板', value: 'manage'}, session: {sessionId: 'session-a' as never}, span: {start: 0,end: 7,draftRev: 8}, position:'leading',via:'menu',action:'pick' }) }) }
   await open()
-  await act(async () => { button('返回').click() })
   scope.bail.mockClear()
   return { scope, fetch, open, ctx, source: command! }
 }
@@ -46,29 +45,29 @@ function button(text: string): HTMLButtonElement {
   return match
 }
 
-it('creates a multiline prompt, inserts ordinary text into the captured session, and shows recent use when reopened', async () => {
-  const { scope, open, fetch } = await setup()
-  expect(document.querySelector('dialog')?.textContent).toContain('全部')
-  await act(async () => { button('新建提示词').click() })
-  const name = document.querySelector('form input') as HTMLInputElement
-  const content = document.querySelector('textarea')!
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(name, '审查')
-    name.dispatchEvent(new Event('input', { bubbles: true }))
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(content, '第一行\n第二行')
-    content.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  await act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
-  expect(document.querySelectorAll('dialog')).toHaveLength(1)
-  await act(async () => { button('插入聊天框').click() })
-  expect(scope.bail).toHaveBeenCalledWith(scope, 'slash/input-insert-text', { text: '\n第一行\n第二行', span: { start: 4, end: 4, draftRev: 8 } })
-  expect(document.querySelector('dialog')).toBeNull()
-  await open()
-  await act(async () => { button('返回').click() })
-  await act(async () => { button('最近使用').click() })
+it('saves a multiline template in the editor and loads it from the sidebar', async () => {
+  const { open } = await setup()
+  await fill('审查', '第一行\n第二行'); await save()
   expect(document.querySelector('[aria-label="提示词列表"]')?.textContent).toContain('审查')
-  expect(fetch.mock.calls.some(([, options]) => options?.body?.includes('create'))).toBe(true)
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('第一行\n第二行')
+  await act(async () => { document.querySelector('dialog')!.dispatchEvent(new Event('cancel', {cancelable:true})) })
+  await open()
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('')
+  await act(async () => { button('审查').click() })
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('第一行\n第二行')
 })
+
+async function fill(name: string, content: string) {
+  await act(async () => {
+    const input = document.querySelector('form input')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, name)
+    input.dispatchEvent(new Event('input', {bubbles:true}))
+    const textarea = document.querySelector('textarea')!
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(textarea, content)
+    textarea.dispatchEvent(new Event('input', {bubbles:true}))
+  })
+}
+async function save() { await act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit', {bubbles:true,cancelable:true})) }) }
 
 it('closes without inserting on Escape and disposes the command with its plugin', async () => {
   const { scope } = await setup()
@@ -91,7 +90,7 @@ it('shows read failures with a retry control', async () => {
 
 it('preserves create fields after a failed save, then retries successfully', async () => {
   const { fetch } = await setup()
-  await act(async () => { button('新建提示词').click() })
+  await act(async () => { button('新建模板').click() })
   await act(async () => {
     const input = document.querySelector('form input')!
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '摘要')
@@ -105,12 +104,12 @@ it('preserves create fields after a failed save, then retries successfully', asy
   expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('请提炼关键观点')
   expect(document.querySelector('[role=alert]')?.textContent).toContain('填写内容已保留')
   await act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) })
-  expect(document.querySelector('[aria-label="提示词预览"]')?.textContent).toContain('请提炼关键观点')
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('请提炼关键观点')
 })
 
 it('protects unsaved text on Escape and returns to editing', async () => {
   await setup()
-  await act(async () => { button('新建提示词').click() })
+  await act(async () => { button('新建模板').click() })
   await act(async () => {
     const input = document.querySelector('form input')!
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '草稿')
@@ -138,7 +137,7 @@ it('lists saved templates in the slash menu and inserts directly without opening
 
 it('copies, modifies and deletes a saved template through management controls', async () => {
   await setup()
-  await act(async () => { button('新建提示词').click() })
+  await act(async () => { button('新建模板').click() })
   const fill = async (name: string, content: string) => act(async () => {
     const input = document.querySelector('form input')!
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,name)
@@ -151,13 +150,26 @@ it('copies, modifies and deletes a saved template through management controls', 
   await fill('模板','原文'); await save()
   const copy = vi.fn(async () => {})
   Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:copy}})
-  await act(async () => { button('复制正文').click() })
+  await act(async () => { button('复制').click() })
   expect(copy).toHaveBeenCalledWith('原文')
-  await act(async () => { button('修改').click() })
   await fill('新名称','修改后的正文'); await save()
-  expect(document.querySelector('[aria-label="提示词预览"]')?.textContent).toContain('修改后的正文')
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('修改后的正文')
   await act(async () => { button('删除').click() })
   expect(document.querySelector('[role=alertdialog]')?.textContent).toContain('新名称')
   await act(async () => { button('确认删除').click() })
-  expect(document.querySelector('[aria-label="提示词列表"]')).toBeNull()
+  expect(document.querySelector('[aria-label="提示词列表"]')?.textContent).toContain('暂无模板')
+})
+
+it('protects edits when switching to a new template', async () => {
+  await setup(); await fill('已保存', '正文'); await save()
+  await fill('已保存', '草稿')
+  await act(async () => { button('新建模板').click() })
+  expect(document.querySelector('[role=alertdialog]')).not.toBeNull()
+  await act(async () => { button('继续编辑').click() })
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('草稿')
+  await act(async () => { button('新建模板').click() })
+  await act(async () => { button('放弃修改').click() })
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('')
+  await act(async () => { button('已保存').click() })
+  expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe('正文')
 })
