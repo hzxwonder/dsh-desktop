@@ -38,6 +38,16 @@ export class PromptStore {
         if (rows.some(row => row.name.toLocaleLowerCase() === value.name.toLocaleLowerCase())) throw new Error('此名称已存在，请使用其他名称。')
         if (rows.length >= 1000) throw new Error('最多保存 1,000 条提示词。')
         rows.push({ ...value, id: randomUUID(), createdAt: Date.now(), lastUsedAt: null })
+      } else if (request.action === 'update') {
+        const row = rows.find(row => row.id === request.id)
+        if (!row) throw new Error('提示词不存在，请重新加载。')
+        const value = validatePrompt(request.name, request.content)
+        if (rows.some(other => other.id !== row.id && other.name.toLocaleLowerCase() === value.name.toLocaleLowerCase())) throw new Error('此名称已存在，请使用其他名称。')
+        Object.assign(row, value)
+      } else if (request.action === 'delete') {
+        const index = rows.findIndex(row => row.id === request.id)
+        if (index === -1) throw new Error('提示词不存在，请重新加载。')
+        rows.splice(index, 1)
       } else if (request.action === 'use') {
         const row = rows.find(row => row.id === request.id)
         if (!row) throw new Error('提示词不存在，请重新打开窗口。')

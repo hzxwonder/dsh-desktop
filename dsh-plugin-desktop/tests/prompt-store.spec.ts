@@ -47,3 +47,18 @@ describe('Desktop prompt persistence', () => {
     expect(await readFile(source.path, 'utf8')).toBe('{broken')
   })
 })
+
+it('updates and deletes by identity while preserving other templates and recent use', async () => {
+  const source = await store()
+  const [row] = await source.change({action:'create',name:'One',content:'old'})
+  await source.change({action:'create',name:'Two',content:'keep'})
+  await source.change({action:'use',id:row!.id})
+  const updated = await source.change({action:'update',id:row!.id,name:'Renamed',content:'new\nbody'})
+  expect(updated[0]).toMatchObject({id:row!.id,name:'Renamed',content:'new\nbody',createdAt:row!.createdAt})
+  expect(updated[0]!.lastUsedAt).not.toBeNull()
+  await expect(source.change({action:'update',id:row!.id,name:'two',content:'duplicate'})).rejects.toThrow('已存在')
+  const remaining = await source.change({action:'delete',id:row!.id})
+  expect(remaining).toHaveLength(1)
+  expect(remaining[0]!.name).toBe('Two')
+  await expect(source.change({action:'update',id:row!.id,name:'One',content:'lost'})).rejects.toThrow('不存在')
+})

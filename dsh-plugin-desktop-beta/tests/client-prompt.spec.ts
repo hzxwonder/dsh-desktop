@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
-import type { CommandContribution } from '@deepseek-ai/dsh-client-ui-commands/client'
+import type { InputTriggerSource } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import { apply } from '../src/client/prompt.tsx'
 
@@ -17,23 +17,27 @@ async function setup() {
     if (options?.method === 'POST') {
       const body = JSON.parse(options.body)
       if (body.action === 'create') rows = [...rows, { id: '1', name: body.name, content: body.content, createdAt: 1, lastUsedAt: null }]
+      if (body.action === 'update') rows = rows.map(row => row.id === body.id ? {...row,name:body.name,content:body.content} : row)
+      if (body.action === 'delete') rows = rows.filter(row => row.id !== body.id)
       if (body.action === 'use') rows[0]!.lastUsedAt = 10
     }
     return { ok: true, status: 200, text: async () => JSON.stringify({ prompts: [...rows] }) }
   })
   vi.stubGlobal('fetch', fetch)
-  let command: CommandContribution | undefined
+  let command: InputTriggerSource | undefined
   const input = { state: { getSnapshot: () => ({ draft: '已有正文', draftRev: 8 }) } }
   const scope = { bail: vi.fn(() => true) }
   const ctx = {
-    commandUi: { register: (item: CommandContribution) => { command = item; return () => { command = undefined } } },
+    inputTriggers: { registerSource: (item: InputTriggerSource) => { command = item; return () => { command = undefined } } },
     sessions: { scope: () => scope }, conversation: { input: { for: () => input } },
     effect: (callback: () => () => void) => { cleanup.push(callback()) },
   }
   apply(ctx as unknown as Context)
-  const open = async () => { await act(async () => { if (command?.ui.kind === 'action') command.ui.run({ sessionId: 'session-a' as never }) }) }
+  const open = async () => { await act(async () => { command?.onPick({ candidate: {name: '新建 Prompt 模板', value: 'manage'}, session: {sessionId: 'session-a' as never}, span: {start: 0,end: 7,draftRev: 8}, position:'leading',via:'menu',action:'pick' }) }) }
   await open()
-  return { scope, fetch, open, ctx }
+  await act(async () => { button('返回').click() })
+  scope.bail.mockClear()
+  return { scope, fetch, open, ctx, source: command! }
 }
 
 function button(text: string): HTMLButtonElement {
@@ -60,6 +64,7 @@ it('creates a multiline prompt, inserts ordinary text into the captured session,
   expect(scope.bail).toHaveBeenCalledWith(scope, 'slash/input-insert-text', { text: '\n第一行\n第二行', span: { start: 4, end: 4, draftRev: 8 } })
   expect(document.querySelector('dialog')).toBeNull()
   await open()
+  await act(async () => { button('返回').click() })
   await act(async () => { button('最近使用').click() })
   expect(document.querySelector('[aria-label="提示词列表"]')?.textContent).toContain('审查')
   expect(fetch.mock.calls.some(([, options]) => options?.body?.includes('create'))).toBe(true)
@@ -115,4 +120,44 @@ it('protects unsaved text on Escape and returns to editing', async () => {
   expect(document.querySelector('[role=alertdialog]')).not.toBeNull()
   await act(async () => { button('继续编辑').click() })
   expect((document.querySelector('form input') as HTMLInputElement).value).toBe('草稿')
+})
+
+it('lists saved templates in the slash menu and inserts directly without opening a dialog', async () => {
+  const { source, scope } = await setup()
+  await act(async () => { document.querySelector('dialog')!.dispatchEvent(new Event('cancel', {cancelable:true})) })
+  const row = {id:'saved', name:'打招呼', content:'hello\nworld',createdAt:1,lastUsedAt:2}
+  vi.stubGlobal('fetch', vi.fn(async () => ({ok:true,status:200,text:async()=>JSON.stringify({prompts:[row]})})))
+  const session = {sessionId:'session-a' as never}
+  const items = await source.candidates(session,{query:'prompt',signal:new AbortController().signal,position:'leading',drilled:false})
+  expect(items.map(item=>item.name)).toEqual(['打招呼','新建 Prompt 模板'])
+  scope.bail.mockClear()
+  source.onPick({candidate:items[0]!,session,span:{start:3,end:10,draftRev:9},position:'inline',via:'menu',action:'pick'})
+  expect(scope.bail).toHaveBeenCalledWith(scope,'slash/input-insert-text',{text:'hello\nworld',span:{start:3,end:10,draftRev:9}})
+  expect(document.querySelector('dialog')).toBeNull()
+})
+
+it('copies, modifies and deletes a saved template through management controls', async () => {
+  await setup()
+  await act(async () => { button('新建提示词').click() })
+  const fill = async (name: string, content: string) => act(async () => {
+    const input = document.querySelector('form input')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,name)
+    input.dispatchEvent(new Event('input',{bubbles:true}))
+    const textarea = document.querySelector('textarea')!
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(textarea,content)
+    textarea.dispatchEvent(new Event('input',{bubbles:true}))
+  })
+  const save = async () => act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})) })
+  await fill('模板','原文'); await save()
+  const copy = vi.fn(async () => {})
+  Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:copy}})
+  await act(async () => { button('复制正文').click() })
+  expect(copy).toHaveBeenCalledWith('原文')
+  await act(async () => { button('修改').click() })
+  await fill('新名称','修改后的正文'); await save()
+  expect(document.querySelector('[aria-label="提示词预览"]')?.textContent).toContain('修改后的正文')
+  await act(async () => { button('删除').click() })
+  expect(document.querySelector('[role=alertdialog]')?.textContent).toContain('新名称')
+  await act(async () => { button('确认删除').click() })
+  expect(document.querySelector('[aria-label="提示词列表"]')).toBeNull()
 })

@@ -3,6 +3,8 @@ import { PROMPT_PATH, validatePrompt, type SavedPrompt } from '../prompt-contrac
 export interface PromptApi {
   list(): Promise<SavedPrompt[]>
   create(name: string, content: string): Promise<SavedPrompt[]>
+  update(id: string, name: string, content: string): Promise<SavedPrompt[]>
+  delete(id: string): Promise<SavedPrompt[]>
   use(id: string): Promise<SavedPrompt[]>
 }
 export function createPromptApi(): PromptApi {
@@ -30,5 +32,5 @@ export function createPromptApi(): PromptApi {
     }
     return result.prompts as SavedPrompt[]
   }
-  return { list: () => request(), create: (name, content) => request({ action: 'create', name, content }), use: id => request({ action: 'use', id }) }
+  return { list: () => request(), create: (name, content) => request({ action: 'create', name, content }), update: (id, name, content) => request({ action: 'update', id, name, content }), delete: id => request({ action: 'delete', id }), use: id => request({ action: 'use', id }) }
 }
