@@ -1,109 +1,113 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { PROMPT_PATH, validatePrompt, type SavedPrompt } from '../prompt-contract.ts'
+import { useEffect, useRef, useState } from 'react'
+import type { SavedPrompt } from '../prompt-contract.ts'
+import { promptStyles } from './prompt-styles.ts'
+import type { PromptApi } from './prompt-api.ts'
+export { createPromptApi, type PromptApi } from './prompt-api.ts'
 
-export interface PromptApi {
-  list(): Promise<SavedPrompt[]>
-  create(name: string, content: string): Promise<SavedPrompt[]>
-  use(id: string): Promise<SavedPrompt[]>
-}
-export function createPromptApi(): PromptApi {
-  const request = async (body?: object): Promise<SavedPrompt[]> => {
-    const response = await fetch(PROMPT_PATH, body === undefined ? { cache: 'no-store' } : {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-    })
-    const result = await response.json() as { prompts: SavedPrompt[]; error?: string }
-    if (!response.ok) throw new Error(result.error ?? '请求失败，请重试。')
-    return result.prompts
-  }
-  return { list: () => request(), create: (name, content) => request({ action: 'create', name, content }), use: id => request({ action: 'use', id }) }
+function Icon({ kind }: { kind: 'search' | 'plus' | 'close' | 'file' | 'back' | 'arrow' | 'alert' }) {
+  const paths = { search: 'm21 21-4.5-4.5M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0', plus: 'M12 5v14M5 12h14', close: 'm6 6 12 12M6 18 18 6', file: 'M14 2H5v20h14V7l-5-5v5h5M8 12h8M8 16h6', back: 'm12 5-7 7 7 7M5 12h15', arrow: 'M4 12h16m-6-6 6 6-6 6', alert: 'M12 8v5m0 3v.01M12 3 2 21h20L12 3Z' }
+  return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[kind]} /></svg>
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null)
-  useEffect(() => {
-    const dialog = ref.current!
-    dialog.showModal()
-    dialog.querySelector<HTMLInputElement>('input')?.focus()
-    return () => { dialog.close() }
-  }, [])
-  return <dialog className="desktop-prompt-dialog" ref={ref} aria-label={title}
-    onCancel={event => { event.preventDefault(); onClose() }}>
-    <header><h2>{title}</h2><button type="button" aria-label={`关闭${title}`} onClick={onClose}>×</button></header>
-    {children}
-  </dialog>
-}
-
-export function PromptLibrary({ api, onInsert, onClose }: {
-  api: PromptApi; onInsert(prompt: SavedPrompt): void; onClose(): void
-}) {
+export function PromptLibrary({ api, onInsert, onClose }: { api: PromptApi; onInsert(prompt: SavedPrompt): void; onClose(): void }) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const search = useRef<HTMLInputElement>(null)
+  const nameInput = useRef<HTMLInputElement>(null)
   const [rows, setRows] = useState<SavedPrompt[]>([])
   const [query, setQuery] = useState('')
+  const [tab, setTab] = useState<'all' | 'recent'>('all')
+  const [selected, setSelected] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const load = () => { setLoading(true); setError(''); void api.list().then(setRows).catch(fail).finally(() => setLoading(false)) }
-  const fail = (cause: unknown) => setError(cause instanceof Error ? cause.message : '操作失败，请重试。')
-  useEffect(load, [api])
-  const select = async (prompt: SavedPrompt) => {
-    if (busy) return
-    setBusy(true); setError('')
-    try { await api.use(prompt.id); onInsert(prompt); onClose() } catch (cause) { fail(cause) } finally { setBusy(false) }
-  }
-  const filtered = rows.filter(row => `${row.name}\n${row.content}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-  const recent = filtered.filter(row => row.lastUsedAt !== null).sort((a, b) => b.lastUsedAt! - a.lastUsedAt!).slice(0, 5)
-  const list = (items: SavedPrompt[]) => items.map(row => <button className="desktop-prompt-row" key={row.id} type="button" disabled={busy} onClick={() => void select(row)}>
-    <strong>{row.name}</strong><span>{row.content}</span>
-  </button>)
-  return <>
-    <style>{styles}</style>
-    <Modal title="提示词库" onClose={() => { if (!busy) onClose() }}>
-      <div className="desktop-prompt-tools"><input autoFocus aria-label="搜索提示词" placeholder="搜索名称或内容…" value={query} onChange={event => setQuery(event.target.value)} />
-        <button type="button" className="desktop-prompt-primary" onClick={() => { setError(''); setCreating(true) }}>＋ 创建 Prompt</button></div>
-      <p className="desktop-prompt-hint">选择提示词，将正文添加到当前聊天框。</p>
-      {error && <p role="alert">{error} <button onClick={load}>重新加载</button></p>}
-      <div className="desktop-prompt-list" aria-busy={loading || busy}>
-        {loading ? <p>正在加载…</p> : <>
-          {recent.length > 0 && <section aria-label="最近使用"><h3>最近使用</h3>{list(recent)}</section>}
-          <section aria-label="全部提示词"><h3>全部提示词 <small>{filtered.length}</small></h3>
-            {list([...filtered].sort((a, b) => b.createdAt - a.createdAt))}
-            {filtered.length === 0 && <p className="desktop-prompt-empty">{rows.length ? '没有匹配的提示词。' : '保存常用指令，下次通过 /prompt 快速使用。'}</p>}
-          </section>
-        </>}
-      </div>
-    </Modal>
-    {creating && <CreatePrompt api={api} onClose={() => setCreating(false)} onCreated={next => { setRows(next); setQuery(''); setCreating(false) }} />}
-  </>
-}
-
-function CreatePrompt({ api, onClose, onCreated }: { api: PromptApi; onClose(): void; onCreated(rows: SavedPrompt[]): void }) {
+  const [loaded, setLoaded] = useState(false)
   const [name, setName] = useState('')
   const [content, setContent] = useState('')
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  return <Modal title="创建 Prompt" onClose={() => { if (!busy) onClose() }}>
-    <form onSubmit={event => {
-      event.preventDefault()
-      if (busy) return
-      try { validatePrompt(name, content) } catch (cause) { setError((cause as Error).message); return }
-      setBusy(true); setError('')
-      void api.create(name, content).then(onCreated).catch(cause => setError(cause instanceof Error ? cause.message : '保存失败，请重试。')).finally(() => setBusy(false))
-    }}>
-      <label>名称<input autoFocus required maxLength={100} value={name} onChange={event => setName(event.target.value)} placeholder="例如：代码审查" /></label>
-      <label>内容<textarea required maxLength={100000} rows={10} value={content} onChange={event => setContent(event.target.value)} placeholder="输入要添加到聊天框的完整提示词…" /></label>
-      {error && <p role="alert">{error}</p>}
-      <footer><button type="button" disabled={busy} onClick={onClose}>取消</button><button className="desktop-prompt-primary" disabled={busy} type="submit">{busy ? '正在保存…' : '保存 Prompt'}</button></footer>
-    </form>
-  </Modal>
+  const [fieldErrors, setFieldErrors] = useState({ name: '', content: '' })
+  const [saveError, setSaveError] = useState('')
+  const [notice, setNotice] = useState('')
+  const alive = useRef(true)
+  const generation = useRef(0)
+  const inFlight = useRef(false)
+  const [discard, setDiscard] = useState(false)
+  const load = async () => {
+    const current = ++generation.current
+    setLoading(true); setError('')
+    try {
+      const next = await api.list()
+      if (alive.current && current === generation.current) { setRows(next); setLoaded(true) }
+    } catch (cause) {
+      if (alive.current && current === generation.current) setError(message(cause))
+    } finally { if (alive.current && current === generation.current) setLoading(false) }
+  }
+  useEffect(() => {
+    alive.current = true
+    dialog.current!.showModal(); search.current?.focus()
+    void load()
+    return () => { alive.current = false; generation.current++; dialog.current?.close() }
+  }, [api])
+  useEffect(() => { if (creating) nameInput.current?.focus(); else search.current?.focus() }, [creating])
+  const back = () => {
+    if (busy) return
+    if (name.trim() || content.trim()) { setDiscard(true); return }
+    setCreating(false); setSaveError('')
+  }
+  const close = () => { if (busy) return; if (creating) back(); else onClose() }
+  const filtered = rows.filter(row => `${row.name}\n${row.content}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()) && (tab !== 'recent' || row.lastUsedAt !== null))
+    .sort((a, b) => tab === 'recent' ? b.lastUsedAt! - a.lastUsedAt! : b.createdAt - a.createdAt)
+  const active = filtered.find(row => row.id === selected) ?? filtered[0]
+  const insert = async () => {
+    if (!active || inFlight.current) return
+    inFlight.current = true; setBusy(true); setError('')
+    try { await api.use(active.id); if (!alive.current) return; onInsert(active); onClose() }
+    catch (cause) { if (alive.current) setError(message(cause)) }
+    finally { inFlight.current = false; if (alive.current) setBusy(false) }
+  }
+  const save = async () => {
+    if (inFlight.current) return
+    const nextErrors = { name: !name.trim() ? '请输入提示词名称' : '', content: !content.trim() ? '请输入提示词正文' : '' }
+    setFieldErrors(nextErrors)
+    if (nextErrors.name || nextErrors.content) { if (nextErrors.name) nameInput.current?.focus(); else dialog.current?.querySelector('textarea')?.focus(); return }
+    inFlight.current = true; setBusy(true); setSaveError('')
+    try {
+      const next = await api.create(name, content)
+      if (!alive.current) return
+      setRows(next); setLoaded(true); setSelected(next.find(row => row.name === name.trim())?.id ?? null)
+      setQuery(''); setTab('all'); setCreating(false); setName(''); setContent(''); setError(''); setNotice('已保存，可预览后插入聊天框')
+    } catch (cause) { if (alive.current) setSaveError(message(cause)) }
+    finally { inFlight.current = false; if (alive.current) setBusy(false) }
+  }
+  return <><style>{promptStyles}</style><dialog ref={dialog} className="dp-dialog" aria-labelledby="dp-title" onCancel={event => { event.preventDefault(); if (discard) setDiscard(false); else close() }} onKeyDown={event => {
+    if (event.nativeEvent.isComposing || discard) return
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); if (creating) void save(); else void insert() }
+  }}>
+    <header className="dp-header"><div className="dp-heading">{creating ? <button className="dp-icon" aria-label="返回提示词库" disabled={busy} onClick={back}><Icon kind="back" /></button> : <span className="dp-mark"><Icon kind="file" /></span>}<div><h2 id="dp-title">{creating ? '新建提示词' : '提示词库'}</h2><p>{creating ? '保存常用指令，随时调用' : '让常用表达，触手可及'}</p></div></div><button className="dp-icon" aria-label={creating ? '关闭新建提示词' : '关闭提示词库'} disabled={busy} onClick={close}><Icon kind="close" /></button></header>
+    {creating ? <form onSubmit={event => { event.preventDefault(); void save() }} className="dp-form" noValidate>
+      <div className="dp-form-body"><label htmlFor="dp-name">名称 <span>便于下次查找</span></label><input id="dp-name" ref={nameInput} maxLength={100} value={name} disabled={busy} aria-invalid={!!fieldErrors.name} aria-describedby={fieldErrors.name ? 'dp-name-error' : undefined} onChange={event => { setName(event.target.value); setFieldErrors(previous => ({ ...previous, name: '' })) }} placeholder="例如：代码审查、润色文章" />
+      {fieldErrors.name && <p className="dp-field-error" id="dp-name-error">{fieldErrors.name}</p>}
+      <label htmlFor="dp-content">正文 <span>{content.length.toLocaleString()} / 100,000</span></label><textarea id="dp-content" rows={8} maxLength={100000} disabled={busy} value={content} aria-invalid={!!fieldErrors.content} aria-describedby={fieldErrors.content ? 'dp-content-error' : undefined} onChange={event => { setContent(event.target.value); setFieldErrors(previous => ({ ...previous, content: '' })) }} placeholder="写下完整的提示词，支持换行…" />
+      {fieldErrors.content && <p className="dp-field-error" id="dp-content-error">{fieldErrors.content}</p>}
+      <p className="dp-helper">使用时会以纯文本添加到聊天框，你可以继续编辑。</p>
+      {saveError && <div className="dp-alert" role="alert"><Icon kind="alert" /><div><strong>未能保存</strong><p>{saveError}</p><small>填写内容已保留，可再次保存。</small></div></div>}
+      </div><footer className="dp-footer"><span className="dp-shortcut">⌘ / Ctrl + Enter 保存</span><div><button className="dp-button" type="button" disabled={busy} onClick={back}>返回</button><button className="dp-primary" disabled={busy} type="submit">{busy ? '正在保存…' : '保存提示词'}</button></div></footer>
+    </form> : <>
+      <div className="dp-toolbar"><div className="dp-search"><Icon kind="search" /><input ref={search} aria-label="搜索提示词" placeholder="搜索名称或正文" value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {
+        if (event.nativeEvent.isComposing) return
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const index = filtered.findIndex(row => row.id === active?.id); const next = filtered[(index + (event.key === 'ArrowDown' ? 1 : -1) + filtered.length) % filtered.length]; if (next) setSelected(next.id) }
+        if (event.key === 'Enter') { event.preventDefault(); void insert() }
+      }} />{query && <button className="dp-clear" aria-label="清空搜索" onClick={() => { setQuery(''); search.current?.focus() }}><Icon kind="close" /></button>}</div><button className="dp-primary" disabled={!loaded || loading || busy} onClick={() => { setCreating(true); setSaveError(''); setNotice('') }}><Icon kind="plus" />新建提示词</button></div>
+      <div className="dp-tabs" aria-label="提示词分类"><button aria-pressed={tab === 'all'} onClick={() => setTab('all')}>全部<span>{rows.length}</span></button><button aria-pressed={tab === 'recent'} onClick={() => setTab('recent')}>最近使用</button></div>
+      {notice && <p className="dp-notice" role="status">{notice}</p>}
+      {error ? <div className="dp-error-state" role="alert"><span className="dp-state-icon"><Icon kind="alert" /></span><h3>{loaded ? '操作未完成' : '暂时无法加载提示词'}</h3><p>{error}</p><button className="dp-button" onClick={() => void load()}>重新加载</button></div>
+      : loading ? <div className="dp-empty" role="status"><span className="dp-spinner" />正在加载提示词…</div>
+      : !active ? <div className="dp-empty"><span className="dp-state-icon"><Icon kind={query ? 'search' : 'file'} /></span><h3>{query ? '没有找到匹配的提示词' : tab === 'recent' ? '还没有使用记录' : '把常用指令，存成提示词'}</h3><p>{query ? '试试其他名称，或搜索正文中的关键词。' : tab === 'recent' ? '插入过的提示词会显示在这里。' : '为它取个名字，下次通过 /prompt 快速找到。'}</p>{!query && tab === 'all' && <button className="dp-button" onClick={() => setCreating(true)}><Icon kind="plus" />创建第一条提示词</button>}</div>
+      : <div className="dp-workspace"><div className="dp-list" aria-label="提示词列表">{filtered.map(row => <button key={row.id} className="dp-row" aria-pressed={active.id === row.id} onClick={() => setSelected(row.id)} disabled={busy}><span className="dp-row-icon"><Icon kind="file" /></span><span><strong>{row.name}</strong><small>{row.content.replace(/\s+/g, ' ')}</small></span></button>)}</div><section className="dp-preview" aria-label="提示词预览"><div className="dp-preview-title"><span>正文预览</span><span>{active.content.length.toLocaleString()} 字符</span></div><h3>{active.name}</h3><pre>{active.content}</pre></section></div>}
+      <footer className="dp-footer"><span className="dp-shortcut">↑ ↓ 选择 <span>↵ 插入</span> <span>Esc 关闭</span></span><button className="dp-primary" disabled={!active || loading || busy || !!error} onClick={() => void insert()}>{busy ? '正在插入…' : '插入聊天框'}<Icon kind="arrow" /></button></footer>
+    </>}
+    {discard && <div className="dp-confirm" role="alertdialog" aria-modal="true" aria-label="保留未保存内容" onKeyDown={event => {
+      if (event.key === 'Tab') { event.preventDefault(); const buttons = event.currentTarget.querySelectorAll('button'); const next = document.activeElement === buttons[0] ? buttons[1] : buttons[0]; next?.focus() }
+    }}><div><h3>离开前，保留这段内容？</h3><p>返回列表会放弃本次填写的内容。</p><div><button autoFocus className="dp-primary" onClick={() => setDiscard(false)}>继续编辑</button><button className="dp-button" onClick={() => { setName(''); setContent(''); setFieldErrors({ name: '', content: '' }); setDiscard(false); setCreating(false) }}>放弃并返回</button></div></div></div>}
+  </dialog></>
 }
-
-const styles = `
-.desktop-prompt-dialog{box-sizing:border-box;width:min(680px,calc(100vw - 32px));max-height:82vh;margin:auto;padding:24px;border:1px solid #8884;border-radius:18px;background:var(--dsw-alias-bg-layer-1,#fff);color:var(--dsw-alias-label-primary,#222);box-shadow:0 24px 80px #0003;font:14px/1.5 system-ui,sans-serif;color-scheme:inherit}
-.desktop-prompt-dialog::backdrop{background:#0005;backdrop-filter:blur(3px)}
-.desktop-prompt-dialog *{box-sizing:border-box}.desktop-prompt-dialog header,.desktop-prompt-tools,.desktop-prompt-dialog footer{display:flex;align-items:center;gap:12px;justify-content:space-between}.desktop-prompt-dialog h2{font-size:20px;margin:0}.desktop-prompt-dialog h3{font-size:13px;opacity:.65;margin:20px 0 8px}.desktop-prompt-dialog small{margin-left:6px}
-.desktop-prompt-dialog button{font:inherit;color:inherit;background:transparent;border:1px solid #8884;border-radius:8px;padding:8px 12px;cursor:pointer}.desktop-prompt-dialog button:hover{background:#8882}.desktop-prompt-dialog button:disabled{opacity:.5;cursor:wait}.desktop-prompt-dialog button:focus-visible,.desktop-prompt-dialog input:focus-visible,.desktop-prompt-dialog textarea:focus-visible{outline:2px solid #4979e8;outline-offset:2px}
-.desktop-prompt-dialog input,.desktop-prompt-dialog textarea{font:inherit;color:inherit;background:transparent;border:1px solid #8885;border-radius:8px;padding:10px 12px;width:100%;min-width:0}.desktop-prompt-tools{margin-top:20px}.desktop-prompt-tools input{flex:1}.desktop-prompt-tools button{white-space:nowrap}.desktop-prompt-dialog .desktop-prompt-primary{background:#3869d4;color:white;border-color:transparent}.desktop-prompt-dialog .desktop-prompt-primary:hover{background:#2858bf}
-.desktop-prompt-hint{font-size:12px;opacity:.65;margin:10px 0}.desktop-prompt-list{overflow:auto;max-height:48vh}.desktop-prompt-dialog .desktop-prompt-row{display:flex;flex-direction:column;text-align:left;width:100%;gap:5px;border-color:transparent;padding:12px;margin:3px 0}.desktop-prompt-row strong{font-weight:600;overflow-wrap:anywhere}.desktop-prompt-row span{white-space:pre-wrap;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;opacity:.65;font-size:13px;overflow-wrap:anywhere}.desktop-prompt-empty{padding:30px 8px;opacity:.6;text-align:center}.desktop-prompt-dialog label{display:block;margin:20px 0 12px}.desktop-prompt-dialog label input,.desktop-prompt-dialog textarea{display:block;margin-top:8px}.desktop-prompt-dialog textarea{resize:vertical;max-height:40vh}.desktop-prompt-dialog footer{justify-content:flex-end;margin-top:20px}.desktop-prompt-dialog [role=alert]{color:#c34c43}
-@media(prefers-color-scheme:dark){.desktop-prompt-dialog{background:var(--dsw-alias-bg-layer-1,#242629);color:var(--dsw-alias-label-primary,#eee)}}
-@media(max-width:480px){.desktop-prompt-dialog{padding:16px}.desktop-prompt-tools{flex-wrap:wrap}.desktop-prompt-tools input{flex-basis:100%}}
-`
+function message(cause: unknown): string { return cause instanceof Error ? cause.message : '操作未完成，请稍后重试。' }
