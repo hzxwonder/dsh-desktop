@@ -1,6 +1,6 @@
 /** Desktop browser panel: tab strip, toolbar, and the host for the native page. */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -34,8 +34,29 @@ type Translate = (key: DesktopBrowserLocaleKey) => string
 /** The overlay entry: resolves the Session and defers every hook to its child. */
 export function DesktopBrowserPanel({ t, useSessions, controller, sidebarTakeover }: DesktopBrowserPanelProps): React.ReactElement | null {
   const sessionId = useSessions(list => list.current)
+  const [embedded, setEmbedded] = useState(false)
+  useEffect(() => {
+    const update = (): void => { setEmbedded(document.querySelector('.lp') !== null) }
+    update()
+    const observer = new MutationObserver(update)
+    observer.observe(document.body, {childList:true,subtree:true})
+    return () => { observer.disconnect() }
+  }, [])
+  if (embedded) return null
   if (sessionId === undefined) return null
   return <BrowserPanelForSession controller={controller(sessionId)} t={t} sidebarTakeover={sidebarTakeover} />
+}
+
+/** Embed the Desktop browser in a session-owned workspace without reserving a shell column. */
+export function DesktopEmbeddedBrowser({sessionId,t}: PropsRuntime<'desktop.browser.embedded'> & PropsLocale<'desktop.browser'>): React.ReactElement {
+  if (!sessionId) return <></>
+  return <EmbeddedBrowserSession sessionId={sessionId} t={t}/>
+}
+function EmbeddedBrowserSession({sessionId,t}:{sessionId:string;t:Translate}): React.ReactElement {
+  const panel = useMemo(() => new DesktopBrowserPanelController(sessionId, {}), [sessionId])
+  useEffect(() => { panel.setOpen(true); return () => { panel.dispose() } }, [panel])
+  const snapshot = useSyncExternalStore(panel.subscribe,panel.getSnapshot,panel.getSnapshot)
+  return snapshot.open ? <BrowserPanelForSession controller={panel} t={t} sidebarTakeover={false}/> : <button onClick={() => {panel.setOpen(true)}}>{t('toggle')}</button>
 }
 
 /** The header button that shows and hides the panel for one Session. */

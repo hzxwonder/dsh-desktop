@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
-import { DesktopBrowserPanel, DesktopBrowserToggle } from './BrowserPanel.tsx'
+import { DesktopBrowserPanel, DesktopBrowserToggle, DesktopEmbeddedBrowser } from './BrowserPanel.tsx'
 import { DesktopBrowserPanelController } from './browser-panel.ts'
 import { en, zh, type DesktopBrowserLocaleKey } from './browser-locales.ts'
 import { installDesktopBrowserStyles } from './browser-styles.ts'
@@ -133,6 +133,8 @@ export function applyDesktopBrowser(ctx: ClientContext): void {
     },
     'dsh-plugin-desktop: browser panels',
   )
+  ctx.slots.inject('desktop.browser.sidebar', () => ctx.slots.register({name:'desktop.browser.sidebar',locale:DESKTOP_BROWSER_LOCALE_NAMESPACE}, DesktopEmbeddedBrowser))
+  ctx.slots.inject('desktop.browser.embedded', () => ctx.slots.register({name:'desktop.browser.embedded',locale:DESKTOP_BROWSER_LOCALE_NAMESPACE}, DesktopEmbeddedBrowser))
   ctx.slots.inject('conversation.session.header.utilities', () => ctx.slots.register({
     name: 'conversation.session.header.utilities',
     id: 'desktop-browser',

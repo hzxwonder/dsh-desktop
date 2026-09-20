@@ -63,6 +63,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * it stays mounted and its session surface keeps answering the commands that
      * need it. The Desktop frame draws this layer above the same track instead.
      */
+    'desktop.browser.sidebar': { kind: 'single'; scope: 'session-maybe' }
+    'desktop.browser.embedded': { kind: 'single'; scope: 'session-maybe' }
     'desktop.browser.column': { kind: 'single'; scope: 'root'; owner: DesktopBrowserColumnOwnerProps }
   }
 }
