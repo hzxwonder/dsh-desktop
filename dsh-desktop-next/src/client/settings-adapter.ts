@@ -90,7 +90,7 @@ export class NextSettingsAdapter {
     restartToRecovery: () => this.command({ type: 'restart-recovery' }),
     reloadRenderer: () => this.command({ type: 'reload' }),
     toggleDeveloperTools: () => this.command({ type: 'devtools' }),
-    checkForUpdates: async () => { throw new Error('Updates are unavailable in Next') },
+    checkForUpdates: () => this.command({ type: 'check-updates' }),
     exportDiagnostics: () => this.command({ type: 'diagnostics' }),
   }
 }

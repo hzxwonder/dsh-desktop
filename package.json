@@ -1209,6 +1209,10 @@
     "start:next": "yarn workspace dsh-desktop-next start",
     "check:next": "yarn workspace dsh-community-market build && yarn workspace dsh-desktop-next check",
     "icons:export": "node scripts/export-app-icons.mjs",
-    "icons:check": "node --test scripts/export-app-icons.test.mjs && node scripts/export-app-icons.mjs --check"
+    "icons:check": "node --test scripts/export-app-icons.test.mjs && node scripts/export-app-icons.mjs --check",
+    "package:dir:next": "yarn aa:prepare-release && yarn workspace dsh-community-market build && yarn workspace dsh-desktop-next package:dir",
+    "dist:mac:next": "yarn aa:prepare-release && yarn workspace dsh-community-market build && yarn workspace dsh-desktop-next dist:mac",
+    "dist:mac-smoke:next": "yarn aa:prepare-release && yarn workspace dsh-community-market build && yarn workspace dsh-desktop-next dist:mac-smoke",
+    "dist:win:next": "yarn aa:prepare-release && yarn aa:prepare-release --verify-release && yarn workspace dsh-community-market build && yarn workspace dsh-desktop-next dist:win"
   }
 }

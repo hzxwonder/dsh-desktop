@@ -78,7 +78,7 @@ const dshResolution = (name: string): unknown =>
 describe('published package surface', () => {
   it('keeps the private workspace version-neutral and versions the Beta package', () => {
     expect(workspaceManifest.version).toBeUndefined()
-    expect(manifest.version).toBe('2.0.13-beta.1')
+    expect(manifest.version).toBe('2.0.14-beta.1')
   })
 
   it('runs all desktop editions and community market typechecks from the root command', () => {
@@ -820,7 +820,7 @@ describe('published package surface', () => {
 
   it('fixes the installed application identity', () => {
     expect(workspaceManifest.version).toBeUndefined()
-    expect(manifest.version).toBe('2.0.13-beta.1')
+    expect(manifest.version).toBe('2.0.14-beta.1')
     expect(manifest.name).toBe('dsh-plugin-desktop-beta')
     expect(manifest.bin).toEqual({
       'dsh-desktop-beta': 'lib/bin.js',
@@ -897,7 +897,6 @@ describe('published package surface', () => {
   it('separates unsigned smoke packaging from the signed macOS release', () => {
     const packageDir = readFileSync(new URL('scripts/package-dir.mjs', packageRoot), 'utf8')
 
-    expect(manifest.scripts?.build).toContain('node scripts/generate-mac-app-icon.mjs')
     expect(manifest.scripts?.['prepare:electron-native']).toBe('node scripts/prepare-fs-ext.ts')
     expect(manifest.scripts?.dev).toContain('yarn run prepare:electron-native')
     expect(manifest.scripts?.['package:dir'])
@@ -1036,6 +1035,10 @@ describe('published package surface', () => {
   it('ships the Composer document and its matching platform resources', () => {
     const composition = JSON.parse(readFileSync(new URL('build/app-icon.icon/icon.json', packageRoot), 'utf8'))
     const resources = JSON.parse(readFileSync(new URL('build/app-icon.resources.json', packageRoot), 'utf8'))
+
+    // Exports are produced by `icons:export` on macOS and committed; libvips resampling is not
+    // byte-reproducible across platforms, so the build must never regenerate the pinned artifacts.
+    expect(manifest.scripts?.build).not.toContain('scripts/generate-')
     expect(composition.fill).toBe('system-dark')
     expect(resources.mac.input).toBe('app-icon.icon')
     expect(manifest.files).toEqual(expect.arrayContaining(['build/app-icon.icon/**', 'build/app-icon.icns']))

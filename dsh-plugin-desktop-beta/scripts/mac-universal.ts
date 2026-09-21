@@ -98,6 +98,8 @@ export const FORBIDDEN_MACOS_UNIVERSAL_ENTRIES = [
 
 /** Injectable filesystem seam for source-runtime preparation. */
 export interface MacUniversalPreparationOptions {
+  /** Override only when a shell does not depend on part of the legacy native inventory. */
+  readonly nativeEntries?: readonly { readonly arch: MacUniversalArch; readonly path: string }[]
   readonly desktopRoot: string
   readonly exists: (path: string) => boolean
   readonly chmod: (path: string, mode: number) => void
@@ -113,7 +115,8 @@ export function prepareMacUniversalRuntime(
   options: MacUniversalPreparationOptions,
 ): void {
   const root = resolve(options.desktopRoot)
-  const missing = MACOS_UNIVERSAL_NATIVE_ENTRIES
+  const entries = options.nativeEntries ?? MACOS_UNIVERSAL_NATIVE_ENTRIES
+  const missing = entries
     .map(entry => join(root, entry.path))
     .filter(path => !options.exists(path))
   if (missing.length > 0) {
@@ -122,7 +125,7 @@ export function prepareMacUniversalRuntime(
     )
   }
 
-  for (const entry of MACOS_UNIVERSAL_NATIVE_ENTRIES) {
+  for (const entry of entries) {
     if (entry.path.endsWith('/spawn-helper') || entry.path.endsWith('/bin/uv')) {
       options.chmod(join(root, entry.path), 0o755)
     }

@@ -767,7 +767,7 @@ describe('published package surface', () => {
 
   it('fixes the installed application identity', () => {
     expect(workspaceManifest.version).toBeUndefined()
-    expect(manifest.version).toBe('2.0.13')
+    expect(manifest.version).toBe('2.0.14')
     expect(manifest.build?.productName).toBe('DSH Desktop')
     expect(manifest.build?.appId).toBe('ai.deepseek.dsh.desktop')
     expect(manifest.build?.asar).toBe(false)
@@ -835,8 +835,6 @@ describe('published package surface', () => {
   it('separates unsigned smoke packaging from the signed macOS release', () => {
     const packageDir = readFileSync(new URL('scripts/package-dir.mjs', packageRoot), 'utf8')
 
-    expect(manifest.scripts?.build).toContain('node scripts/generate-windows-app-icon.mjs')
-    expect(manifest.scripts?.build).toContain('node scripts/generate-mac-app-icon.mjs')
     expect(manifest.scripts?.['package:dir']).toBe('yarn run build && yarn run prepare:electron-native && node scripts/package-dir.mjs')
     expect(packageDir).toContain("CSC_IDENTITY_AUTO_DISCOVERY: 'false'")
     expect(packageDir).toContain("'--config.forceCodeSigning=false'")
@@ -965,6 +963,10 @@ describe('published package surface', () => {
   it('ships the Composer document and its matching platform resources', () => {
     const composition = JSON.parse(readFileSync(new URL('build/app-icon.icon/icon.json', packageRoot), 'utf8'))
     const resources = JSON.parse(readFileSync(new URL('build/app-icon.resources.json', packageRoot), 'utf8'))
+
+    // Exports are produced by `icons:export` on macOS and committed; libvips resampling is not
+    // byte-reproducible across platforms, so the build must never regenerate the pinned artifacts.
+    expect(manifest.scripts?.build).not.toContain('scripts/generate-')
     expect(composition.fill).toBe('system-dark')
     expect(resources.mac.input).toBe('app-icon.icon')
     expect(manifest.files).toEqual(expect.arrayContaining(['build/app-icon.icon/**', 'build/app-icon.icns']))

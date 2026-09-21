@@ -51,6 +51,7 @@ export interface DesktopState {
   home: string
   platform: string
   version: string
+  updates?: import('./update-state.ts').NextUpdateState
   trayAvailable: boolean
   notificationsAvailable: boolean
   windowsMicaSupported: boolean
@@ -76,6 +77,7 @@ export interface DesktopBrowserLinks {
 }
 
 export type DesktopCommand =
+  | { type: 'check-updates' | 'download-update' | 'install-update' }
   | { type: 'recovery-action'; action: string; id?: string }
   | ({ type: 'onboarding-complete'; profile: string } & OnboardingChoices)
   | { type: 'onboarding-skip'; profile: string }
