@@ -19,6 +19,10 @@ const allowedDifferences = new Set([
   // follows that API; stable stays on 0.1.5-rc.2, where the field still exists.
   'profile.ts',
   'profile-manager.ts',
+  // dsh 0.1.6-alpha.2 dropped `current` from the Session list snapshot and marks the
+  // Session the main view retains instead. The browser panel is root-scoped and resolves
+  // the on-screen Session through this helper, so only its body differs by channel.
+  'client/session-selection.ts',
 ])
 const normalizeIdentity = source => source.toString().replaceAll('dsh-plugin-desktop-beta', 'dsh-plugin-desktop').replaceAll('DSH Desktop Beta', 'DSH Desktop')
 // Allow only the alpha.2 bootstrap adapter calls, not arbitrary drift in these

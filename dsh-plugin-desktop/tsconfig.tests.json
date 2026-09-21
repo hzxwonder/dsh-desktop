@@ -11,6 +11,7 @@
     "tests/client-aa-settings.spec.ts",
     "tests/client-desktop-settings.spec.ts",
     "tests/client-browser-column.spec.ts",
+    "tests/client-session-selection.spec.ts",
     "tests/client-environment.spec.ts",
     "tests/client-layout-service.spec.ts",
     "tests/client-sidebar-dom-anchor.spec.ts",

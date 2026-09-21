@@ -5,6 +5,7 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from './contracts.ts'
+import { currentSessionId } from './session-selection.ts'
 import { BROWSER_ZOOM_LEVELS, DesktopBrowserPanelController, type BrowserPanelSnapshot } from './browser-panel.ts'
 import type { DesktopBrowserLocaleKey } from './browser-locales.ts'
 import { DesktopBrowserGlyph } from './browser-glyphs.tsx'
@@ -33,7 +34,7 @@ type Translate = (key: DesktopBrowserLocaleKey) => string
 
 /** The overlay entry: resolves the Session and defers every hook to its child. */
 export function DesktopBrowserPanel({ t, useSessions, controller, sidebarTakeover }: DesktopBrowserPanelProps): React.ReactElement | null {
-  const sessionId = useSessions(list => list.current)
+  const sessionId = useSessions(list => currentSessionId(list))
   const [embedded, setEmbedded] = useState(false)
   useEffect(() => {
     const update = (): void => { setEmbedded(document.querySelector('.lp') !== null) }
