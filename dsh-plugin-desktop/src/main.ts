@@ -33,6 +33,7 @@ import {
 import { desktopProductVersion, ElectronDesktopRuntime } from './electron-runtime.ts'
 import { getOrCreateDesktopInstallationId } from './desktop-installation-id.ts'
 import {
+  describeDesktopChildProcess,
   ElectronStderrLogger,
   installDesktopChildProcessLogging,
   installDesktopUncaughtExceptionLogging,
@@ -51,6 +52,7 @@ import type {
   DesktopLifecycleRendererFailureReason,
 } from './lifecycle-events.ts'
 import { FileExporter } from './file-exporter.ts'
+import { installAgentErrorLogging } from './agent-error-logging.ts'
 import { DESKTOP_SETTINGS_NAMESPACE, type DesktopSettings } from './index.ts'
 import {
   desktopLanBrowserUrls,
@@ -399,6 +401,10 @@ async function start(): Promise<void> {
   let removeShutdownRequests: (() => void) | undefined
   let removeUncaughtExceptionLogging: (() => void) | undefined
   let removeChildProcessLogging: (() => void) | undefined
+  // Electron reports a Host exit as a bare code with no reason. The most recent
+  // Chromium child failure is the only thing that can say who else went down
+  // with it, so keep it for the Host exit record.
+  let lastChildProcessGone: string | undefined
   let fileExporter: FileExporter | undefined
   let runtime!: ElectronDesktopRuntime
   let logSink: LogFileSink | undefined
@@ -493,7 +499,9 @@ async function start(): Promise<void> {
   } catch (cause) {
     electronLogger.error(`${BIN_NAME}: active run tracking unavailable: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
-  removeChildProcessLogging = installDesktopChildProcessLogging(app, electronLogger)
+  removeChildProcessLogging = installDesktopChildProcessLogging(app, electronLogger, details => {
+    lastChildProcessGone = describeDesktopChildProcess(details)
+  })
   const nativeExit = createDesktopExitCoordinator(
     {
       prepareToQuit: () => { runtime.prepareToQuit() },
@@ -1507,9 +1515,18 @@ async function start(): Promise<void> {
         runtime, rendererToken: browserAccess.rendererHeader.value,
         prepareCertificate: prepareHostCertificate,
         bindHost: host => generation.bindHost(host), requestQuit,
-        onFailure: error => {
+        onFailure: (error, exit) => {
           electronLogger.error(error.message)
+          lifecycleRecorder.recordHostExit({
+            exitCode: exit.exitCode,
+            expected: false,
+            uptimeMs: exit.uptimeMs,
+            ...(lastChildProcessGone === undefined ? {} : { childProcessGone: lastChildProcessGone }),
+          })
           runtime.notifyAttention({ title: PRODUCT_NAME, body: error.message })
+          // A dialog that cannot open must not turn a dead Host into a dead app.
+          void runtime.showHostStoppedRecovery({ exitCode: exit.exitCode })
+            .catch((cause: unknown) => { electronLogger.errorCause(cause) })
         },
       })
     } else {
@@ -1590,6 +1607,8 @@ async function start(): Promise<void> {
             fileExporter = new FileExporter(logSink)
             hostCtx.logger.exporter(fileExporter)
           }
+          // Registered before the plugin tree mounts, so no agent can fail unrecorded.
+          installAgentErrorLogging(hostCtx)
           await hostCtx.plugin(DesktopProfileService, {
             current: {
               name: activeProfileName,

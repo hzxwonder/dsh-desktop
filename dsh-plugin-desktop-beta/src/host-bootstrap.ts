@@ -1,6 +1,7 @@
 /** Headless bootstrap for the Beta isolated Host experiment. */
 import { boot, resolveProfileDir } from '@deepseek-ai/dsh-app-boot'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
+import { createDesktopProfileBoot } from './profile-context.ts'
 import { DSH_LAUNCH_ENVIRONMENT_KEY, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
 import { DESKTOP_PACKAGE_NAME as BIN_NAME } from './product-identity.ts'
 import { DESKTOP_SETTINGS_NAMESPACE, type DesktopSettings } from './index.ts'
@@ -22,6 +23,7 @@ import type { DesktopPnpmBootstrap } from './pnpm.ts'
 import type { DesktopRuntime } from './runtime.ts'
 import type { DesktopStartupGenerationHost } from './startup-generation.ts'
 import { FileExporter } from './file-exporter.ts'
+import { installAgentErrorLogging } from './agent-error-logging.ts'
 import { LogFileSink } from './log-files.ts'
 
 function desktopProfileMarketSnapshot(market: DesktopMarketProvider): DesktopMarketSnapshot {
@@ -89,11 +91,13 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
       await profilePreferencesWriteTail
     }
     const releasePackageResolver = installProfilePackageResolver(prepared.bareModuleBaseUrl)
+    const profileBoot = createDesktopProfileBoot(prepared, desktopPnpmBootstrap)
     const ctx = await boot(
       BIN_NAME,
       prepared.rootConfig,
       prepared.patches,
       async (hostCtx) => {
+        profileBoot.prepare(hostCtx)
         // Keep Host imports and browser bundle discovery on the same public
         // profile-overlay resolver used by packaged Electron.
         hostCtx.loader.internal = undefined
@@ -128,6 +132,8 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
           fileExporter = new FileExporter(logSink)
           hostCtx.logger.exporter(fileExporter)
         }
+        // Registered before the plugin tree mounts, so no agent can fail unrecorded.
+        installAgentErrorLogging(hostCtx)
         await hostCtx.plugin(DesktopProfileService, {
           current: {
             name: activeProfileName,
@@ -250,6 +256,7 @@ export async function bootDesktopHost(options: DesktopHostOptions, runtime: Desk
       throw cause
     })
     bindHost(ctx)
+    profileBoot.markReady()
     fileExporter?.setThreshold((ctx.settings.get(DESKTOP_SETTINGS_NAMESPACE) as DesktopSettings | undefined)?.logLevel ?? 'info')
     ctx.on('settings/updated', (namespace, next) => {
       if (namespace === DESKTOP_SETTINGS_NAMESPACE) {

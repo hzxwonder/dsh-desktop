@@ -5,7 +5,7 @@ the package names, versions, and licenses for transparency.
 | Package | Version | License |
 | --- | --- | --- |
 | @agentclientprotocol/sdk | 1.4.0 | Apache-2.0 |
-| @agents-anywhere/dsh-bridge-next | 0.1.0-dev.0.desktop.c00df092c98b2.rcda81994 | MIT |
+| @agents-anywhere/dsh-bridge-next | 0.1.0-dev.0.desktop.ca022d9286dd0.rc4b2a1d2 | MIT |
 | @anthropic-ai/sdk | 0.123.0 | MIT |
 | @aws-crypto/sha256-browser | 5.2.0 | Apache-2.0 |
 | @aws-crypto/sha256-js | 5.2.0 | Apache-2.0 |
@@ -34,6 +34,9 @@ the package names, versions, and licenses for transparency.
 | @babel/code-frame | 7.29.7 | MIT |
 | @babel/helper-validator-identifier | 7.29.7 | MIT |
 | @babel/runtime | 7.29.7 | MIT |
+| @dataiku/uv | 0.12.0 | MIT |
+| @dataiku/uv-darwin-arm64 | 0.12.0 | MIT |
+| @dataiku/uv-darwin-x64 | 0.12.0 | MIT |
 | @deepseek-ai/cordis | 4.0.2 | MIT |
 | @deepseek-ai/cordis-plugin-group | 1.0.2 | MIT |
 | @deepseek-ai/cordis-plugin-hmr | 1.0.17 | MIT |

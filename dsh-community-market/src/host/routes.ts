@@ -474,7 +474,7 @@ export interface MarketInstallServiceProvider {
 }
 
 export interface MarketDesktopActions {
-  openTerminal(): void
+  openTerminal?(): void
   requestRestart(): Promise<void>
 }
 
@@ -711,7 +711,16 @@ export function registerMarketRoutes(
     locale: string,
   ): Promise<void> => {
     const cache = catalogCacheFromResponse(response, sourceRecordId, locale)
-    if (cache !== undefined) await scope.update({ catalogCache: cache })
+    if (cache === undefined) return
+    try {
+      await scope.update({ catalogCache: cache })
+    } catch (cause) {
+      // Catalog browsing already succeeded; a failed cache write must not
+      // escalate into an unhandled rejection that terminates the host.
+      ctx.logger.error(`dsh-community-market: failed to persist the catalog cache: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`)
+    }
   }
   const settingsScope = scope
   const routes = [
@@ -727,7 +736,7 @@ export function registerMarketRoutes(
           sources: await service.listSources(),
           builtIns: viewBuiltIns(),
           desktopActions: {
-            openTerminal: desktopActions !== undefined,
+            openTerminal: typeof desktopActions?.openTerminal === 'function',
             requestRestart: desktopActions !== undefined
               && installProvider?.get() !== undefined,
           },
@@ -943,7 +952,7 @@ export function registerMarketRoutes(
           return
         }
         const actions = desktopActionsProvider.get()
-        if (actions === undefined) {
+        if (actions?.openTerminal === undefined) {
           sendJson(res, 503, { error: 'desktop actions are unavailable' })
           return
         }
